@@ -4,6 +4,7 @@ import type { PrinterBridgePlugin } from './definitions';
 
 export class PrinterBridgePluginWeb extends WebPlugin implements PrinterBridgePlugin {
   async print(options: {
+    deviceName: string;
     deviceId: string;
     serviceId?: string;
     characteristicId?: string;
@@ -13,7 +14,18 @@ export class PrinterBridgePluginWeb extends WebPlugin implements PrinterBridgePl
     console.log('Received data:', options.data);
     return { success: false };
   }
+
+  async checkPermissions(): Promise<{ permission: string }> {
+    console.warn('checkPermissions is not supported on the web; returning "granted" for testing.');
+    // On web, we cannot really check BLUETOOTH_CONNECT; just return "granted" for testing purposes.
+    return { permission: 'granted' };
+  }
+
+  async requestPermissions(): Promise<{ permission: string }> {
+    console.warn('requestPermissions is not supported on the web; returning "granted" for testing.');
+    return { permission: 'granted' };
+  }
 }
 
-const PrinterPlugin = new PrinterBridgePluginWeb();
-export { PrinterPlugin };
+const PrinterBridge = new PrinterBridgePluginWeb();
+export { PrinterBridge };

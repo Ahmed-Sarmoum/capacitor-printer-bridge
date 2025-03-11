@@ -13,24 +13,54 @@ npx cap sync
 
 <docgen-index>
 
-* [`echo(...)`](#echo)
+* [`print(...)`](#print)
+* [`checkPermissions()`](#checkpermissions)
+* [`requestPermissions()`](#requestpermissions)
 
 </docgen-index>
 
 <docgen-api>
 <!--Update the source file JSDoc comments and rerun docgen to update the docs below-->
 
-### echo(...)
+### print(...)
 
 ```typescript
-echo(options: { value: string; }) => Promise<{ value: string; }>
+print(options: { deviceName: string; deviceId: string; serviceId?: string; characteristicId?: string; data: string; }) => Promise<{ success: boolean; }>
 ```
 
-| Param         | Type                            |
-| ------------- | ------------------------------- |
-| **`options`** | <code>{ value: string; }</code> |
+Send text data to the printer.
 
-**Returns:** <code>Promise&lt;{ value: string; }&gt;</code>
+| Param         | Type                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **`options`** | <code>{ deviceName: string; deviceId: string; serviceId?: string; characteristicId?: string; data: string; }</code> |
+
+**Returns:** <code>Promise&lt;{ success: boolean; }&gt;</code>
+
+--------------------
+
+
+### checkPermissions()
+
+```typescript
+checkPermissions() => Promise<{ permission: string; }>
+```
+
+Checks if the necessary Bluetooth permissions (e.g. BLUETOOTH_CONNECT) are granted.
+
+**Returns:** <code>Promise&lt;{ permission: string; }&gt;</code>
+
+--------------------
+
+
+### requestPermissions()
+
+```typescript
+requestPermissions() => Promise<{ permission: string; }>
+```
+
+Requests the necessary Bluetooth permissions.
+
+**Returns:** <code>Promise&lt;{ permission: string; }&gt;</code>
 
 --------------------
 
