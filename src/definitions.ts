@@ -6,13 +6,7 @@ export interface PrinterBridgePlugin {
    * @param options.characteristicId Not used here, but available if needed
    * @param options.data The text you want to print
    */
-  print(options: {
-    deviceName: string;
-    deviceId: string;
-    serviceId?: string;
-    characteristicId?: string;
-    data: string;
-  }): Promise<{ success: boolean }>;
+  print(options: { deviceName: string; deviceId: string; data: string }): Promise<{ success: boolean }>;
 
   /**
    * Checks if the necessary Bluetooth permissions (e.g. BLUETOOTH_CONNECT) are granted.

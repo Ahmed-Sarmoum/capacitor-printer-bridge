@@ -25,14 +25,14 @@ npx cap sync
 ### print(...)
 
 ```typescript
-print(options: { deviceName: string; deviceId: string; serviceId?: string; characteristicId?: string; data: string; }) => Promise<{ success: boolean; }>
+print(options: { deviceName: string; deviceId: string; data: string; }) => Promise<{ success: boolean; }>
 ```
 
 Send text data to the printer.
 
-| Param         | Type                                                                                                                |
-| ------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **`options`** | <code>{ deviceName: string; deviceId: string; serviceId?: string; characteristicId?: string; data: string; }</code> |
+| Param         | Type                                                                 |
+| ------------- | -------------------------------------------------------------------- |
+| **`options`** | <code>{ deviceName: string; deviceId: string; data: string; }</code> |
 
 **Returns:** <code>Promise&lt;{ success: boolean; }&gt;</code>
 
