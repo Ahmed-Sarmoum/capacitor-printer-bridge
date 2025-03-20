@@ -100,7 +100,7 @@ public class PrinterBridgePlugin extends Plugin {
                 @Override
                 public void connectionFailed(String s) {
                     Log.e(TAG, "Connection failed: " + s);
-
+                    call.reject("Connection failed, please try reconnect to the printer!!");
                 }
 
                 @Override
