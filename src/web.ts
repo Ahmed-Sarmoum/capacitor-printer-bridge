@@ -14,6 +14,12 @@ export class PrinterBridgePluginWeb extends WebPlugin implements PrinterBridgePl
     return { permission: 'granted' };
   }
 
+  async printQRCode(options: { deviceName: string; deviceId: string; qrData: string }): Promise<{ success: boolean }> {
+    console.log('PrinterPlugin: printQRCode is not supported on web.');
+    console.log('QR Code data:', options.qrData);
+    return { success: false };
+  }
+
   async requestPermissions(): Promise<{ permission: string }> {
     console.warn('requestPermissions is not supported on the web; returning "granted" for testing.');
     return { permission: 'granted' };

@@ -1,15 +1,22 @@
 export interface PrinterBridgePlugin {
   /**
    * Send text data to the printer.
-   * @param options.deviceId The Bluetooth MAC address (from @capacitor-community/bluetooth-le)
-   * @param options.serviceId Not used in our simple example but can be used for further customization
-   * @param options.characteristicId Not used here, but available if needed
-   * @param options.data The text you want to print
+   * @param options.deviceName The name of the paired Bluetooth device
+   * @param options.deviceId The Bluetooth MAC address
+   * @param options.data The plain text string to print (newline-separated if needed)
    */
   print(options: { deviceName: string; deviceId: string; data: string }): Promise<{ success: boolean }>;
 
   /**
-   * Checks if the necessary Bluetooth permissions (e.g. BLUETOOTH_CONNECT) are granted.
+   * Prints a QR Code containing the provided data.
+   * @param options.deviceName The name of the paired Bluetooth device
+   * @param options.deviceId The Bluetooth MAC address
+   * @param options.qrData The data to encode inside the QR code
+   */
+  printQRCode(options: { deviceName: string; deviceId: string; qrData: string }): Promise<{ success: boolean }>;
+
+  /**
+   * Checks if the necessary Bluetooth permissions are granted.
    */
   checkPermissions(): Promise<{ permission: string }>;
 

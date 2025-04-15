@@ -14,6 +14,7 @@ npx cap sync
 <docgen-index>
 
 * [`print(...)`](#print)
+* [`printQRCode(...)`](#printqrcode)
 * [`checkPermissions()`](#checkpermissions)
 * [`requestPermissions()`](#requestpermissions)
 
@@ -39,13 +40,30 @@ Send text data to the printer.
 --------------------
 
 
+### printQRCode(...)
+
+```typescript
+printQRCode(options: { deviceName: string; deviceId: string; qrData: string; }) => Promise<{ success: boolean; }>
+```
+
+Prints a QR Code containing the provided data.
+
+| Param         | Type                                                                   |
+| ------------- | ---------------------------------------------------------------------- |
+| **`options`** | <code>{ deviceName: string; deviceId: string; qrData: string; }</code> |
+
+**Returns:** <code>Promise&lt;{ success: boolean; }&gt;</code>
+
+--------------------
+
+
 ### checkPermissions()
 
 ```typescript
 checkPermissions() => Promise<{ permission: string; }>
 ```
 
-Checks if the necessary Bluetooth permissions (e.g. BLUETOOTH_CONNECT) are granted.
+Checks if the necessary Bluetooth permissions are granted.
 
 **Returns:** <code>Promise&lt;{ permission: string; }&gt;</code>
 
