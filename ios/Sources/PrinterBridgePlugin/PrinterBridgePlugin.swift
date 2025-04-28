@@ -233,7 +233,7 @@ public class PrinterBridgePlugin: CAPPlugin, CBCentralManagerDelegate, CBPeriphe
                 CAPLog.print("Found writable characteristic: \(characteristic.uuid.uuidString)")
                 writeCharacteristic = characteristic
                 // Determine write type (prefer .withResponse if available for reliability, unless printer requires .withoutResponse)
-                writeType = characteristic.properties.contains(.write) ? .withResponse : .writeWithoutResponse
+                writeType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
                 CAPLog.print("Using write type: \(writeType == .withResponse ? "withResponse" : "withoutResponse")")
 
                 // If we were waiting for connection/discovery, resolve the connection call
@@ -593,7 +593,7 @@ public class PrinterBridgePlugin: CAPPlugin, CBCentralManagerDelegate, CBPeriphe
         connectToDevice(call: call, deviceId: deviceId)
     }
 
-    @objc func checkPermissions(_ call: CAPPluginCall) {
+    @objc override public func checkPermissions(_ call: CAPPluginCall) {
         var result: String
         if #available(iOS 13.1, *) {
             switch CBCentralManager.authorization {
@@ -627,7 +627,7 @@ public class PrinterBridgePlugin: CAPPlugin, CBCentralManagerDelegate, CBPeriphe
         call.resolve(["bluetooth": result])
     }
 
-    @objc func requestPermissions(_ call: CAPPluginCall) {
+    @objc override public func requestPermissions(_ call: CAPPluginCall) {
         // On iOS, you cannot programmatically trigger the permission prompt *except*
         // by actually attempting to use Bluetooth (like scanning).
         // So, this method can either just check the status again, or initiate
@@ -667,5 +667,4 @@ public class PrinterBridgePlugin: CAPPlugin, CBCentralManagerDelegate, CBPeriphe
 
 // Helper extension for ISO Latin 6 encoding if needed
 extension String.Encoding {
-    static let isoLatin6 = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.isoLatin6.rawValue)))
-}
+    static let isoLatin6 = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.isoLatin6.rawValue)))}
