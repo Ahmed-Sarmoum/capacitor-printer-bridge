@@ -105,12 +105,12 @@ Gets the device ID (MAC address) of a paired Bluetooth device by its name.
 ### getPairedDevices()
 
 ```typescript
-getPairedDevices() => Promise<{ devices: { name: string; address: string; type: number; }[]; count: number; }>
+getPairedDevices() => Promise<{ devices: { name: string; deviceId: string; type: number; }[]; count: number; }>
 ```
 
 Gets a list of all paired Bluetooth devices.
 
-**Returns:** <code>Promise&lt;{ devices: { name: string; address: string; type: number; }[]; count: number; }&gt;</code>
+**Returns:** <code>Promise&lt;{ devices: { name: string; deviceId: string; type: number; }[]; count: number; }&gt;</code>
 
 --------------------
 
