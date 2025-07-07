@@ -1,5 +1,6 @@
 package com.ahmed.plugin.printerbridge;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -13,6 +14,7 @@ import android.bluetooth.BluetoothAdapter;
 
 import com.mazenrashed.printooth.utilities.PrintingCallback;
 
+import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -32,6 +34,8 @@ import android.graphics.Bitmap;
 
 
 import java.util.ArrayList;
+import java.util.Set;
+
 @CapacitorPlugin(
         name = "PrinterBridge",
         permissions = {
@@ -441,6 +445,156 @@ public class PrinterBridgePlugin extends Plugin {
         }
     }
 
+    @PluginMethod
+    public void getDeviceIdFromPairedDevices(PluginCall call) {
+        if (!hasRequiredPermissions()) {
+            call.reject("Bluetooth permissions not granted");
+            return;
+        }
+
+        String printerName = call.getString("printerName");
+        
+        if (printerName == null || printerName.isEmpty()) {
+            call.reject("Printer name is required");
+            return;
+        }
+
+        try {
+            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+            if (adapter == null) {
+                Log.e(TAG, "Bluetooth adapter not available");
+                call.reject("Bluetooth adapter not available");
+                return;
+            }
+
+            if (!adapter.isEnabled()) {
+                Log.e(TAG, "Bluetooth is not enabled");
+                call.reject("Bluetooth is not enabled");
+                return;
+            }
+
+            // Check for required permissions
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.BLUETOOTH_CONNECT) 
+                    != PackageManager.PERMISSION_GRANTED) {
+                    Log.e(TAG, "BLUETOOTH_CONNECT permission not granted");
+                    call.reject("BLUETOOTH_CONNECT permission not granted");
+                    return;
+                }
+            }
+
+            Set<BluetoothDevice> pairedDevices = adapter.getBondedDevices();
+            
+            if (pairedDevices == null || pairedDevices.isEmpty()) {
+                Log.w(TAG, "No paired devices found");
+                call.reject("No paired devices found");
+                return;
+            }
+
+            Log.d(TAG, "Searching for printer: " + printerName + " among " + pairedDevices.size() + " paired devices");
+
+            for (BluetoothDevice device : pairedDevices) {
+                String deviceName = device.getName();
+                String deviceAddress = device.getAddress();
+                
+                Log.d(TAG, "Checking device: " + deviceName + " (" + deviceAddress + ")");
+                
+                if (deviceName != null && deviceName.equals(printerName)) {
+                    Log.d(TAG, "Found matching device: " + deviceName + " with address: " + deviceAddress);
+                    
+                    // Return success with device information
+                    JSObject result = new JSObject();
+                    result.put("deviceId", deviceAddress);
+                    result.put("deviceName", deviceName);
+                    result.put("success", true);
+                    call.resolve(result);
+                    return;
+                }
+            }
+
+            Log.w(TAG, "No paired device found with name: " + printerName);
+            call.reject("No paired device found with name: " + printerName);
+
+        } catch (SecurityException e) {
+            Log.e(TAG, "Security exception when accessing paired devices: " + e.getMessage());
+            call.reject("Security exception when accessing paired devices: " + e.getMessage());
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting device ID from paired devices: " + e.getMessage());
+            call.reject("Error getting device ID from paired devices: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void getPairedDevices(PluginCall call) {
+        if (!hasRequiredPermissions()) {
+            call.reject("Bluetooth permissions not granted");
+            return;
+        }
+
+        try {
+            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+            if (adapter == null) {
+                Log.e(TAG, "Bluetooth adapter not available");
+                call.reject("Bluetooth adapter not available");
+                return;
+            }
+
+            if (!adapter.isEnabled()) {
+                Log.e(TAG, "Bluetooth is not enabled");
+                call.reject("Bluetooth is not enabled");
+                return;
+            }
+
+            // Check for required permissions
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.BLUETOOTH_CONNECT)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    Log.e(TAG, "BLUETOOTH_CONNECT permission not granted");
+                    call.reject("BLUETOOTH_CONNECT permission not granted");
+                    return;
+                }
+            }
+
+            Set<BluetoothDevice> pairedDevices = adapter.getBondedDevices();
+
+            if (pairedDevices == null || pairedDevices.isEmpty()) {
+                Log.w(TAG, "No paired devices found");
+                JSObject result = new JSObject();
+                result.put("devices", new JSArray());
+                call.resolve(result);
+                return;
+            }
+
+            // Convert BluetoothDevice set to JSArray
+            JSArray devicesArray = new JSArray();
+
+            for (BluetoothDevice device : pairedDevices) {
+                String deviceName = device.getName();
+                String deviceAddress = device.getAddress();
+
+                Log.d(TAG, "Found paired device: " + deviceName + " (" + deviceAddress + ")");
+
+                JSObject deviceInfo = new JSObject();
+                deviceInfo.put("name", deviceName != null ? deviceName : "Unknown Device");
+                deviceInfo.put("deviceId", deviceAddress);
+                deviceInfo.put("type", device.getType()); // Device type (e.g., DEVICE_TYPE_CLASSIC)
+
+                devicesArray.put(deviceInfo);
+            }
+
+            JSObject result = new JSObject();
+            result.put("devices", devicesArray);
+            result.put("count", devicesArray.length());
+            call.resolve(result);
+
+        } catch (SecurityException e) {
+            Log.e(TAG, "Security exception when accessing paired devices: " + e.getMessage());
+            call.reject("Security exception when accessing paired devices: " + e.getMessage());
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting paired devices: " + e.getMessage());
+            call.reject("Error getting paired devices: " + e.getMessage());
+        }
+    }
     private void requestPermissionForPrint() {
         requestAllPermissions(savedPrintCall, "permissionsCallback");
     }

@@ -17,6 +17,8 @@ npx cap sync
 * [`printQRCode(...)`](#printqrcode)
 * [`checkPermissions()`](#checkpermissions)
 * [`requestPermissions()`](#requestpermissions)
+* [`getDeviceIdFromPairedDevices(...)`](#getdeviceidfrompaireddevices)
+* [`getPairedDevices()`](#getpaireddevices)
 
 </docgen-index>
 
@@ -79,6 +81,36 @@ requestPermissions() => Promise<{ permission: string; }>
 Requests the necessary Bluetooth permissions.
 
 **Returns:** <code>Promise&lt;{ permission: string; }&gt;</code>
+
+--------------------
+
+
+### getDeviceIdFromPairedDevices(...)
+
+```typescript
+getDeviceIdFromPairedDevices(options: { printerName: string; }) => Promise<{ deviceId: string; deviceName: string; success: boolean; }>
+```
+
+Gets the device ID (MAC address) of a paired Bluetooth device by its name.
+
+| Param         | Type                                  |
+| ------------- | ------------------------------------- |
+| **`options`** | <code>{ printerName: string; }</code> |
+
+**Returns:** <code>Promise&lt;{ deviceId: string; deviceName: string; success: boolean; }&gt;</code>
+
+--------------------
+
+
+### getPairedDevices()
+
+```typescript
+getPairedDevices() => Promise<{ devices: { name: string; address: string; type: number; }[]; count: number; }>
+```
+
+Gets a list of all paired Bluetooth devices.
+
+**Returns:** <code>Promise&lt;{ devices: { name: string; address: string; type: number; }[]; count: number; }&gt;</code>
 
 --------------------
 

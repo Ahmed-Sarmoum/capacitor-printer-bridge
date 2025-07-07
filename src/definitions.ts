@@ -24,4 +24,28 @@ export interface PrinterBridgePlugin {
    * Requests the necessary Bluetooth permissions.
    */
   requestPermissions(): Promise<{ permission: string }>;
+
+  /**
+   * Gets the device ID (MAC address) of a paired Bluetooth device by its name.
+   * @param options.printerName The name of the paired Bluetooth printer to search for
+   * @returns Promise with device information if found
+   */
+  getDeviceIdFromPairedDevices(options: { printerName: string }): Promise<{
+    deviceId: string;
+    deviceName: string;
+    success: boolean;
+  }>;
+
+  /**
+   * Gets a list of all paired Bluetooth devices.
+   * @returns Promise with array of paired devices
+   */
+  getPairedDevices(): Promise<{
+    devices: {
+      name: string;
+      deviceId: string;
+      type: number;
+    }[];
+    count: number;
+  }>;
 }

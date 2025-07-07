@@ -3,6 +3,14 @@ import { WebPlugin } from '@capacitor/core';
 import type { PrinterBridgePlugin } from './definitions';
 
 export class PrinterBridgePluginWeb extends WebPlugin implements PrinterBridgePlugin {
+  getPairedDevices(): Promise<{ devices: { name: string; deviceId: string; type: number }[]; count: number }> {
+    throw new Error('Method not implemented.');
+  }
+
+  getDeviceIdFromPairedDevices(): Promise<{ deviceId: string; deviceName: string; success: boolean }> {
+    throw new Error('Method not implemented.');
+  }
+
   async print(options: { deviceName: string; deviceId: string; data: string }): Promise<{ success: boolean }> {
     console.log('PrinterPlugin: printing on web is not supported.');
     console.log('Received data:', options.data);
