@@ -19,6 +19,10 @@ npx cap sync
 * [`requestPermissions()`](#requestpermissions)
 * [`getDeviceIdFromPairedDevices(...)`](#getdeviceidfrompaireddevices)
 * [`getPairedDevices()`](#getpaireddevices)
+* [`getAvailableDevices()`](#getavailabledevices)
+* [`pairDevice(...)`](#pairdevice)
+* [`getDeviceInfo(...)`](#getdeviceinfo)
+* [Interfaces](#interfaces)
 
 </docgen-index>
 
@@ -28,7 +32,7 @@ npx cap sync
 ### print(...)
 
 ```typescript
-print(options: { deviceName: string; deviceId: string; data: string; }) => Promise<{ success: boolean; }>
+print(options: { deviceName: string; deviceId: string; data: string; }) => any
 ```
 
 Send text data to the printer.
@@ -37,7 +41,7 @@ Send text data to the printer.
 | ------------- | -------------------------------------------------------------------- |
 | **`options`** | <code>{ deviceName: string; deviceId: string; data: string; }</code> |
 
-**Returns:** <code>Promise&lt;{ success: boolean; }&gt;</code>
+**Returns:** <code>any</code>
 
 --------------------
 
@@ -45,7 +49,7 @@ Send text data to the printer.
 ### printQRCode(...)
 
 ```typescript
-printQRCode(options: { deviceName: string; deviceId: string; qrData: string; }) => Promise<{ success: boolean; }>
+printQRCode(options: { deviceName: string; deviceId: string; qrData: string; }) => any
 ```
 
 Prints a QR Code containing the provided data.
@@ -54,7 +58,7 @@ Prints a QR Code containing the provided data.
 | ------------- | ---------------------------------------------------------------------- |
 | **`options`** | <code>{ deviceName: string; deviceId: string; qrData: string; }</code> |
 
-**Returns:** <code>Promise&lt;{ success: boolean; }&gt;</code>
+**Returns:** <code>any</code>
 
 --------------------
 
@@ -62,12 +66,12 @@ Prints a QR Code containing the provided data.
 ### checkPermissions()
 
 ```typescript
-checkPermissions() => Promise<{ permission: string; }>
+checkPermissions() => any
 ```
 
 Checks if the necessary Bluetooth permissions are granted.
 
-**Returns:** <code>Promise&lt;{ permission: string; }&gt;</code>
+**Returns:** <code>any</code>
 
 --------------------
 
@@ -75,12 +79,12 @@ Checks if the necessary Bluetooth permissions are granted.
 ### requestPermissions()
 
 ```typescript
-requestPermissions() => Promise<{ permission: string; }>
+requestPermissions() => any
 ```
 
 Requests the necessary Bluetooth permissions.
 
-**Returns:** <code>Promise&lt;{ permission: string; }&gt;</code>
+**Returns:** <code>any</code>
 
 --------------------
 
@@ -88,7 +92,7 @@ Requests the necessary Bluetooth permissions.
 ### getDeviceIdFromPairedDevices(...)
 
 ```typescript
-getDeviceIdFromPairedDevices(options: { printerName: string; }) => Promise<{ deviceId: string; deviceName: string; success: boolean; }>
+getDeviceIdFromPairedDevices(options: { printerName: string; }) => any
 ```
 
 Gets the device ID (MAC address) of a paired Bluetooth device by its name.
@@ -97,7 +101,7 @@ Gets the device ID (MAC address) of a paired Bluetooth device by its name.
 | ------------- | ------------------------------------- |
 | **`options`** | <code>{ printerName: string; }</code> |
 
-**Returns:** <code>Promise&lt;{ deviceId: string; deviceName: string; success: boolean; }&gt;</code>
+**Returns:** <code>any</code>
 
 --------------------
 
@@ -105,13 +109,77 @@ Gets the device ID (MAC address) of a paired Bluetooth device by its name.
 ### getPairedDevices()
 
 ```typescript
-getPairedDevices() => Promise<{ devices: { name: string; deviceId: string; type: number; }[]; count: number; }>
+getPairedDevices() => any
 ```
 
 Gets a list of all paired Bluetooth devices.
 
-**Returns:** <code>Promise&lt;{ devices: { name: string; deviceId: string; type: number; }[]; count: number; }&gt;</code>
+**Returns:** <code>any</code>
 
 --------------------
+
+
+### getAvailableDevices()
+
+```typescript
+getAvailableDevices() => any
+```
+
+Gets a list of all available Bluetooth devices (both paired and unpaired).
+This method will start device discovery and may take up to 30 seconds.
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### pairDevice(...)
+
+```typescript
+pairDevice(options: { deviceAddress: string; }) => any
+```
+
+Pairs with a Bluetooth device using its MAC address.
+
+| Param         | Type                                    |
+| ------------- | --------------------------------------- |
+| **`options`** | <code>{ deviceAddress: string; }</code> |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### getDeviceInfo(...)
+
+```typescript
+getDeviceInfo(options: { deviceAddress: string; }) => any
+```
+
+Gets detailed information about a specific Bluetooth device.
+
+| Param         | Type                                    |
+| ------------- | --------------------------------------- |
+| **`options`** | <code>{ deviceAddress: string; }</code> |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### Interfaces
+
+
+#### BluetoothDevice
+
+| Prop                   | Type                 | Description                                                 |
+| ---------------------- | -------------------- | ----------------------------------------------------------- |
+| **`name`**             | <code>string</code>  | The display name of the device                              |
+| **`deviceId`**         | <code>string</code>  | The Bluetooth MAC address                                   |
+| **`isPaired`**         | <code>boolean</code> | Whether the device is currently paired                      |
+| **`bondState`**        | <code>string</code>  | The bond state as a string (BONDED, BONDING, NONE, UNKNOWN) |
+| **`deviceClass`**      | <code>number</code>  | The device class code (optional)                            |
+| **`majorDeviceClass`** | <code>number</code>  | The major device class code (optional)                      |
+| **`type`**             | <code>number</code>  | Device type for backward compatibility                      |
 
 </docgen-api>

@@ -18,12 +18,22 @@ export interface PrinterBridgePlugin {
   /**
    * Checks if the necessary Bluetooth permissions are granted.
    */
-  checkPermissions(): Promise<{ permission: string }>;
+  checkPermissions(): Promise<{
+    permission: {
+      bluetooth: 'granted' | 'denied';
+      bluetooth_connect: 'granted' | 'denied';
+    };
+  }>;
 
   /**
    * Requests the necessary Bluetooth permissions.
    */
-  requestPermissions(): Promise<{ permission: string }>;
+  requestPermissions(): Promise<{
+    permission: {
+      bluetooth: 'granted' | 'denied';
+      bluetooth_connect: 'granted' | 'denied';
+    };
+  }>;
 
   /**
    * Gets the device ID (MAC address) of a paired Bluetooth device by its name.
@@ -41,11 +51,51 @@ export interface PrinterBridgePlugin {
    * @returns Promise with array of paired devices
    */
   getPairedDevices(): Promise<{
-    devices: {
-      name: string;
-      deviceId: string;
-      type: number;
-    }[];
+    devices: BluetoothDevice[];
     count: number;
   }>;
+
+  /**
+   * Gets a list of all available Bluetooth devices (both paired and unpaired).
+   * This method will start device discovery and may take up to 30 seconds.
+   * @returns Promise with array of all discovered devices
+   */
+  getAvailableDevices(): Promise<{
+    devices: BluetoothDevice[];
+    count: number;
+  }>;
+
+  /**
+   * Pairs with a Bluetooth device using its MAC address.
+   * @param options.deviceAddress The Bluetooth MAC address of the device to pair with
+   * @returns Promise with pairing result
+   */
+  pairDevice(options: { deviceAddress: string }): Promise<{
+    success: boolean;
+    message: string;
+  }>;
+
+  /**
+   * Gets detailed information about a specific Bluetooth device.
+   * @param options.deviceAddress The Bluetooth MAC address of the device
+   * @returns Promise with device information
+   */
+  getDeviceInfo(options: { deviceAddress: string }): Promise<BluetoothDevice>;
+}
+
+export interface BluetoothDevice {
+  /** The display name of the device */
+  name: string;
+  /** The Bluetooth MAC address */
+  deviceId: string;
+  /** Whether the device is currently paired */
+  isPaired: boolean;
+  /** The bond state as a string (BONDED, BONDING, NONE, UNKNOWN) */
+  bondState: string;
+  /** The device class code (optional) */
+  deviceClass?: number;
+  /** The major device class code (optional) */
+  majorDeviceClass?: number;
+  /** Device type for backward compatibility */
+  type?: number;
 }

@@ -1,637 +1,417 @@
 package com.ahmed.plugin.printerbridge;
 
-import com.getcapacitor.JSArray;
+import android.Manifest;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+
+import com.ahmed.plugin.printerbridge.exceptions.PrinterException;
+import com.ahmed.plugin.printerbridge.models.PrintRequest;
+import com.ahmed.plugin.printerbridge.models.QRCodePrintRequest;
+import com.ahmed.plugin.printerbridge.services.BluetoothService;
+import com.ahmed.plugin.printerbridge.services.PrinterService;
+import com.ahmed.plugin.printerbridge.utils.Logger;
 import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
-import io.paperdb.Paper;
-import android.Manifest;
-import android.bluetooth.BluetoothAdapter;
-
-import com.mazenrashed.printooth.utilities.PrintingCallback;
-
-import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothGatt;
-import android.content.pm.PackageManager;
-import android.os.Build;
-import android.util.Log;
-
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-
 import com.mazenrashed.printooth.Printooth;
 
-import com.mazenrashed.printooth.data.printable.Printable;
-import com.mazenrashed.printooth.utilities.Printing;
-import com.mazenrashed.printooth.data.printable.RawPrintable;
+import org.json.JSONException;
 
-
-import android.graphics.Bitmap;
-
-
-import java.util.ArrayList;
-import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import io.paperdb.Paper;
 
 @CapacitorPlugin(
         name = "PrinterBridge",
         permissions = {
                 @Permission(
-                        alias = "bluetooth",
+                        alias = PrinterBridgePlugin.BLUETOOTH,
                         strings = {
                                 Manifest.permission.BLUETOOTH,
                                 Manifest.permission.BLUETOOTH_ADMIN,
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION
+                        }
+                ),
+                @Permission(
+                        alias = PrinterBridgePlugin.BLUETOOTH_CONNECT,
+                        strings = {
                                 Manifest.permission.BLUETOOTH_CONNECT,
                                 Manifest.permission.BLUETOOTH_SCAN,
+                                Manifest.permission.BLUETOOTH_ADVERTISE
                         }
                 )
         }
 )
 public class PrinterBridgePlugin extends Plugin {
+
+    // Define constants for the permission aliases
+    static final String BLUETOOTH = "bluetooth";
+    static final String BLUETOOTH_CONNECT = "bluetooth_connect";
+    private static final String TAG = "PrinterBridgePlugin";
+
+    // Your implementation services
+    private BluetoothService bluetoothService;
+    private PrinterService printerService;
+
+    // State management
+    private final AtomicBoolean isInitialized = new AtomicBoolean(false);
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+
     @Override
     public void load() {
-        super.load();
-        Paper.init(this.getActivity());
-        Printooth.INSTANCE.init(this.getActivity());
+        // Initialize services in a background thread
+        new Thread(this::initializeServices).start();
     }
 
-    private static final String TAG = "PrinterBridge";
-    private BluetoothGatt bluetoothGatt;
-    private PluginCall savedPrintCall;
-    private Printing printing;
-
-    @PluginMethod
-    public void print(PluginCall call) {
-        if (!hasRequiredPermissions()) {
-            savedPrintCall = call;
-            requestPermissionForPrint();
-            return;
-        }
-
-        String dataString = call.getString("data");
-        String[] data = dataString != null ? dataString.split("\n") : new String[0];
-        String printerName = call.getString("deviceName");
-        String deviceId = call.getString("deviceId");
-
-        printText(call, data, printerName, deviceId);
-
-    }
-
-
-    @PluginMethod
-    public void printQRCode(PluginCall call) {
-        if (!hasRequiredPermissions()) {
-            savedPrintCall = call;
-            requestPermissionForPrint();
-            return;
-        }
-
-        String qrData = call.getString("qrData");
-        String printerName = call.getString("deviceName");
-        String deviceId = call.getString("deviceId");
-
-        if (qrData == null || qrData.isEmpty()) {
-            call.reject("QR code data cannot be empty");
-            return;
-        }
-
-        printQRCodeWithESCPOS(call, qrData, printerName, deviceId);
-    }
-
-    public void printQRCodeWithESCPOS(PluginCall call, String qrData, String printerName, String deviceId) {
-
-        // Implement a retry counter
-        final int[] retryCount = {0};
-        final int MAX_RETRIES = 3;
-
-        try {
-            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-            if (adapter == null) {
-                Log.e(TAG, "Bluetooth not supported");
-                call.reject("Bluetooth not supported");
-                return;
-            }
-
-            if (!adapter.isEnabled()) {
-                Log.e(TAG, "Bluetooth is disabled");
-                call.reject("Bluetooth is disabled");
-                return;
-            }
-
-            // Check QR data length
-            byte[] qrBytes;
+    private void initializeServices() {
+        if (isInitialized.compareAndSet(false, true)) {
             try {
-                qrBytes = qrData.getBytes("UTF-8");
-                if (qrBytes.length > 800) {
-                    Log.e(TAG, "QR data is too large (" + qrBytes.length + " bytes)");
-                    call.reject("QR data is too large. Please reduce data to less than 800 bytes.");
-                    return;
-                }
-
-                if (qrBytes.length > 200) {
-                    Log.w(TAG, "QR data is very long (" + qrBytes.length + " bytes), might cause issues with some printers");
-                }
+                Paper.init(getContext());
+                Printooth.INSTANCE.init(getContext());
+                this.bluetoothService = new BluetoothService(getContext());
+                this.printerService = new PrinterService(this.bluetoothService);
+                Logger.d(TAG, "Services initialized successfully.");
             } catch (Exception e) {
-                Log.e(TAG, "Error encoding QR data: " + e.getMessage());
-                call.reject("Error encoding QR data: " + e.getMessage());
-                return;
+                Logger.e(TAG, "Fatal: Failed to initialize services.", e);
+                isInitialized.set(false);
             }
-
-            // Try to ensure any previous connections are closed
-            if (printing != null) {
-                try {
-                    printing.wait();
-                    // Wait a moment for the disconnect to complete
-                    Thread.sleep(1000);
-                } catch (Exception e) {
-                    Log.w(TAG, "Error disconnecting previous session: " + e.getMessage());
-                    // Continue anyway
-                }
-            }
-
-            Printooth.INSTANCE.setPrinter(printerName, deviceId);
-            printing = Printooth.INSTANCE.printer();
-
-            printing.setPrintingCallback(new PrintingCallback() {
-                @Override
-                public void connectingWithPrinter() {
-                    Log.d(TAG, "Connecting to printer...");
-                }
-
-                @Override
-                public void connectionFailed(String s) {
-                    Log.e(TAG, "Connection failed: " + s);
-
-                    // Implement retry logic
-                    if (retryCount[0] < MAX_RETRIES) {
-                        retryCount[0]++;
-                        Log.d(TAG, "Retrying connection, attempt " + retryCount[0]);
-
-                        // Wait a moment before retrying
-                        try {
-                            Thread.sleep(2000);
-                            // Then try to print again
-                            preparePrintData(qrBytes, call);
-                        } catch (InterruptedException e) {
-                            Log.e(TAG, "Retry interrupted: " + e.getMessage());
-                            call.reject("Connection retry failed: " + s);
-                        }
-                    } else {
-                        call.reject("Connection failed after " + MAX_RETRIES + " attempts. Please check the printer and try again.");
-                    }
-                }
-
-                @Override
-                public void onError(String s) {
-                    Log.e(TAG, "Print error: " + s);
-                    call.reject("Printing error: " + s);
-                }
-
-                @Override
-                public void onMessage(String s) {
-                    Log.d(TAG, "Printer message: " + s);
-                }
-
-                @Override
-                public void printingOrderSentSuccessfully() {
-                    Log.d(TAG, "Print job sent successfully!");
-                    call.resolve();
-                }
-
-                @Override
-                public void disconnected() {
-                    Log.d(TAG, "Disconnected from printer");
-                }
-            });
-
-            // Start the initial print attempt
-            preparePrintData(qrBytes, call);
-
-        } catch (Exception err) {
-            Log.e(TAG, "Exception in printQRCode: " + err.getMessage(), err);
-            call.reject("Error setting up printer: " + err.getMessage());
         }
     }
 
-    // Separate method for preparing print data that can be called for retries
-    private void preparePrintData(byte[] qrBytes, PluginCall call) {
-        try {
-            ArrayList<Printable> printables = new ArrayList<>();
+    // --- Core Plugin Methods ---
 
-            // Initialize printer
-            printables.add(new RawPrintable.Builder(new byte[]{0x1B, 0x40}).build());
+    @PluginMethod
+    public void getPairedDevices(PluginCall call) {
+        if (!ensureInitialized(call)) return;
 
-            // Center alignment
-            printables.add(new RawPrintable.Builder(new byte[]{0x1B, 0x61, 0x01}).build());
-
-            // Determine best settings based on data length
-            int qrSize = 4; // Default size
-            int errorCorrectionLevel = 0x31; // Default to 'M' level
-
-            // Adjust QR code parameters based on data length
-            if (qrBytes.length > 300) {
-                qrSize = 6;
-                errorCorrectionLevel = 0x30; // Lower error correction for more data capacity ('0' = L level)
-                Log.d(TAG, "Using larger QR size and lower error correction for large data");
-            } else if (qrBytes.length > 100) {
-                qrSize = 5; // Medium size
-                Log.d(TAG, "Using medium QR size for moderate data");
-            }
-
-            // QR Code: Select model
-            printables.add(new RawPrintable.Builder(new byte[]{0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00}).build());
-
-            // QR Code: Set size
-            printables.add(new RawPrintable.Builder(new byte[]{0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, (byte)qrSize}).build());
-
-            // QR Code: Set error correction level
-            // 30h = L (7%), 31h = M (15%), 32h = Q (25%), 33h = H (30%)
-            printables.add(new RawPrintable.Builder(new byte[]{0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, (byte)errorCorrectionLevel}).build());
-
-            // Calculate length bytes for the data command
-            int len = qrBytes.length + 3;
-            byte pL = (byte) (len % 256);
-            byte pH = (byte) (len / 256);
-
-            // Store QR data
-            printables.add(new RawPrintable.Builder(new byte[]{0x1D, 0x28, 0x6B, pL, pH, 0x31, 0x50, 0x30}).build());
-            printables.add(new RawPrintable.Builder(qrBytes).build());
-
-            // Print QR code
-            printables.add(new RawPrintable.Builder(new byte[]{0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30}).build());
-
-            // Extra line feed to ensure QR is printed fully
-            printables.add(new RawPrintable.Builder(new byte[]{0x0A, 0x0A}).build());
-
-            // Reset to left alignment
-            printables.add(new RawPrintable.Builder(new byte[]{0x1B, 0x61, 0x00}).build());
-
-            // Add some space after QR code
-            lineFeed(3, printables);
-
-            // Send print job
-            printing.print(printables);
-
-        } catch (Exception e) {
-            Log.e(TAG, "Exception when preparing print data: " + e.getMessage(), e);
-            call.reject("Error preparing print data: " + e.getMessage());
-        }
-    }
-    public void printText(PluginCall call, String[] str, String printerName, String deviceId) {
-        try {
-            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-            if (adapter == null) {
-                Log.e(TAG, "Bluetooth not supported");
-                call.reject("Bluetooth not supported");
-                return;
-            }
-
-            if (!adapter.isEnabled()) {
-                Log.e(TAG, "Bluetooth is disabled");
-                call.reject("Bluetooth is disabled");
-                return;
-            }
-
-            Printooth.INSTANCE.setPrinter(printerName, deviceId);
-
-            printing = Printooth.INSTANCE.printer();
-
-            printing.setPrintingCallback(new PrintingCallback() {
-                @Override
-                public void connectingWithPrinter() {
-                    Log.d(TAG, "Connecting to printer...");
-                }
-
-                @Override
-                public void connectionFailed(String s) {
-                    Log.e(TAG, "Connection failed: " + s);
-                    call.reject("Connection failed, please try reconnect to the printer!!");
-                }
-
-                @Override
-                public void onError(String s) {
-                    Log.e(TAG, "Print error: " + s);
-                    call.reject("Printing error: " + s);
-                }
-
-                @Override
-                public void onMessage(String s) {
-                    Log.d(TAG, "Printer message: " + s);
-                }
-
-                @Override
-                public void printingOrderSentSuccessfully() {
-                    Log.d(TAG, "Print job sent successfully!");
-                    call.resolve();
-                }
-
-                @Override
-                public void disconnected() {
-                    Log.d(TAG, "Disconnected from printer");
-                }
-            });
-
-            try {
-                ArrayList<Printable> printables = new ArrayList<>();
-                printables.add(new RawPrintable.Builder(new byte[]{0x1B,0x74,28}).build());
-
-                for(String line: str) {
-                    Log.d(TAG, line);
-                    printables.add(new RawPrintable.Builder(line.getBytes("ISO-8859-6")).setNewLinesAfter(1).build());
-                }
-
-                lineFeed(3, printables);
-
-                printing.print(printables);
-            } catch (Exception e) {
-                Log.e(TAG, "Exception when printing: " + e.getMessage(), e);
-                call.reject("Error during print: " + e.getMessage());
-            }
-        } catch (Exception err) {
-            Log.e(TAG, "Exception in printText: " + err.getMessage(), err);
-            call.reject("Error setting up printer: " + err.getMessage());
-        }
-    }
-
-    private void lineFeed(int num, ArrayList<Printable> printables) {
-        for (int i = 1; i<=num; i++) {
-            printables.add(new RawPrintable.Builder(new byte[]{0x0D, 0x0A}).build());
+        if (!hasBluetoothPermissions()) {
+            requestBluetoothPermissions(call, "pairedDevicesPermissionCallback");
+        } else {
+            doGetPairedDevices(call);
         }
     }
 
     @PluginMethod
-    public void checkPermissions(PluginCall call) {
-        JSObject permissionsResultJSON = new JSObject();
+    public void getAvailableDevices(PluginCall call) {
+        if (!ensureInitialized(call)) return;
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // Android 14+
-            boolean hasBluetoothConnect = ContextCompat.checkSelfPermission(
-                    getContext(), Manifest.permission.BLUETOOTH_CONNECT
-            ) == PackageManager.PERMISSION_GRANTED;
-
-            boolean hasBluetoothScan = ContextCompat.checkSelfPermission(
-                    getContext(), Manifest.permission.BLUETOOTH_SCAN
-            ) == PackageManager.PERMISSION_GRANTED;
-
-
-            permissionsResultJSON.put("bluetooth",
-                    (hasBluetoothConnect && hasBluetoothScan) ? "granted" : "denied");
-
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { // Android 12+
-            boolean hasBluetoothConnect = ContextCompat.checkSelfPermission(
-                    getContext(), Manifest.permission.BLUETOOTH_CONNECT
-            ) == PackageManager.PERMISSION_GRANTED;
-
-            boolean hasBluetoothScan = ContextCompat.checkSelfPermission(
-                    getContext(), Manifest.permission.BLUETOOTH_SCAN
-            ) == PackageManager.PERMISSION_GRANTED;
-
-            permissionsResultJSON.put("bluetooth",
-                    (hasBluetoothConnect && hasBluetoothScan) ? "granted" : "denied");
-
+        if (!hasBluetoothPermissions()) {
+            requestBluetoothPermissions(call, "availableDevicesPermissionCallback");
         } else {
-            permissionsResultJSON.put("bluetooth", "granted");
+            doGetAvailableDevices(call);
         }
-
-        call.resolve(permissionsResultJSON);
     }
 
     @PluginMethod
-    public void requestPermissions(PluginCall call) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            requestAllPermissions(call, "permissionsCallback");
+    public void pairDevice(PluginCall call) {
+        if (!ensureInitialized(call)) return;
+
+        if (!hasBluetoothPermissions()) {
+            requestBluetoothPermissions(call, "pairDevicePermissionCallback");
         } else {
-            JSObject result = new JSObject();
-            result.put("bluetooth", "granted");
-            call.resolve(result);
+            doPairDevice(call);
         }
     }
 
-    @PermissionCallback
-    private void permissionsCallback(PluginCall call) {
-        JSObject permissionsResultJSON = new JSObject();
+    @PluginMethod
+    public void getDeviceInfo(PluginCall call) {
+        if (!ensureInitialized(call)) return;
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            boolean hasBluetoothConnect = ContextCompat.checkSelfPermission(
-                    getContext(),
-                    Manifest.permission.BLUETOOTH_CONNECT
-            ) == PackageManager.PERMISSION_GRANTED;
-
-            boolean hasBluetoothScan = ContextCompat.checkSelfPermission(
-                    getContext(),
-                    Manifest.permission.BLUETOOTH_SCAN
-            ) == PackageManager.PERMISSION_GRANTED;
-
-            permissionsResultJSON.put("bluetooth",
-                    hasBluetoothConnect && hasBluetoothScan ? "granted" : "denied");
+        if (!hasBluetoothPermissions()) {
+            requestBluetoothPermissions(call, "deviceInfoPermissionCallback");
         } else {
-            permissionsResultJSON.put("bluetooth", "granted");
-        }
-
-        if (savedPrintCall != null) {
-            if (permissionsResultJSON.getString("bluetooth").equals("granted")) {
-                String dataString = call.getString("data");
-                String[] data = dataString != null ? dataString.split("\n") : new String[0];
-                String printerName = call.getString("printerName");
-                String deviceId = call.getString("deviceId");
-
-                printText(call, data, printerName, deviceId);
-            } else {
-                savedPrintCall.reject("Bluetooth connect permission not granted");
-            }
-            savedPrintCall = null;
+            doGetDeviceInfo(call);
         }
     }
 
     @PluginMethod
     public void getDeviceIdFromPairedDevices(PluginCall call) {
-        if (!hasRequiredPermissions()) {
-            call.reject("Bluetooth permissions not granted");
+        if (!ensureInitialized(call)) return;
+
+        if (!hasBluetoothPermissions()) {
+            requestBluetoothPermissions(call, "deviceIdFromPairedPermissionCallback");
+        } else {
+            doGetDeviceIdFromPairedDevices(call);
+        }
+    }
+
+
+    @PluginMethod
+    public void print(PluginCall call) {
+        if (!ensureInitialized(call)) return;
+
+        if (!hasBluetoothPermissions()) {
+            requestBluetoothPermissions(call, "printPermissionCallback");
+        } else {
+            doPrint(call);
+        }
+    }
+
+
+
+
+    @PluginMethod
+    public void printQRCode(PluginCall call) {
+        if (!ensureInitialized(call)) return;
+
+        if (!hasBluetoothPermissions()) {
+            requestBluetoothPermissions(call, "printQRCodePermissionCallback");
+        } else {
+            doPrintQRCode(call);
+        }
+    }
+
+    // --- Permission Callbacks ---
+
+    @PermissionCallback
+    private void pairedDevicesPermissionCallback(PluginCall call) {
+        if (hasBluetoothPermissions()) {
+            doGetPairedDevices(call);
+        } else {
+            call.reject("Bluetooth permissions are required to get paired devices.");
+        }
+    }
+
+    @PermissionCallback
+    private void availableDevicesPermissionCallback(PluginCall call) {
+        if (hasBluetoothPermissions()) {
+            doGetAvailableDevices(call);
+        } else {
+            call.reject("Bluetooth permissions are required to discover available devices.");
+        }
+    }
+
+    @PermissionCallback
+    private void pairDevicePermissionCallback(PluginCall call) {
+        if (hasBluetoothPermissions()) {
+            doPairDevice(call);
+        } else {
+            call.reject("Bluetooth permissions are required to pair devices.");
+        }
+    }
+
+    @PermissionCallback
+    private void deviceInfoPermissionCallback(PluginCall call) {
+        if (hasBluetoothPermissions()) {
+            doGetDeviceInfo(call);
+        } else {
+            call.reject("Bluetooth permissions are required to get device information.");
+        }
+    }
+
+    @PermissionCallback
+    private void deviceIdFromPairedPermissionCallback(PluginCall call) {
+        if (hasBluetoothPermissions()) {
+            doGetDeviceIdFromPairedDevices(call);
+        } else {
+            call.reject("Bluetooth permissions are required to search paired devices.");
+        }
+    }
+
+    @PermissionCallback
+    private void printPermissionCallback(PluginCall call) {
+        if (hasBluetoothPermissions()) {
+            doPrint(call);
+        } else {
+            call.reject("Bluetooth permissions are required to print.");
+        }
+    }
+
+    @PermissionCallback
+    private void printQRCodePermissionCallback(PluginCall call) {
+        if (hasBluetoothPermissions()) {
+            doPrintQRCode(call);
+        } else {
+            call.reject("Bluetooth permissions are required to print QR codes.");
+        }
+    }
+
+    // --- Private "Implementation" Methods ---
+
+    private void doGetPairedDevices(PluginCall call) {
+        try {
+            JSObject result = bluetoothService.getPairedDevices();
+            // Add count for consistency with TypeScript interface
+            if (result.has("devices")) {
+                result.put("count", result.getJSONArray("devices").length());
+            }
+            call.resolve(result);
+        } catch (PrinterException e) {
+            call.reject(e.getMessage());
+        } catch (JSONException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void doGetAvailableDevices(PluginCall call) {
+        // Execute discovery in background thread as it takes time
+        getBridge().execute(() -> {
+            try {
+                JSObject result = bluetoothService.discoverDevices();
+                // Add count for consistency with TypeScript interface
+                if (result.has("devices")) {
+                    result.put("count", result.getJSONArray("devices").length());
+                }
+                mainHandler.post(() -> call.resolve(result));
+            } catch (PrinterException e) {
+                Logger.e(TAG, "Device discovery failed", e);
+                mainHandler.post(() -> call.reject(e.getMessage()));
+            } catch (JSONException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    private void doPairDevice(PluginCall call) {
+        String deviceAddress = call.getString("deviceAddress");
+        if (deviceAddress == null || deviceAddress.isEmpty()) {
+            call.reject("Device address is required");
             return;
         }
 
+        // Execute pairing in background thread as it takes time
+        getBridge().execute(() -> {
+            try {
+                JSObject result = bluetoothService.pairDevice(deviceAddress);
+                mainHandler.post(() -> call.resolve(result));
+            } catch (PrinterException e) {
+                Logger.e(TAG, "Device pairing failed", e);
+                mainHandler.post(() -> call.reject(e.getMessage()));
+            }
+        });
+    }
+
+    private void doGetDeviceInfo(PluginCall call) {
+        String deviceAddress = call.getString("deviceAddress");
+        if (deviceAddress == null || deviceAddress.isEmpty()) {
+            call.reject("Device address is required");
+            return;
+        }
+
+        try {
+            JSObject result = bluetoothService.getDeviceInfo(deviceAddress);
+            call.resolve(result);
+        } catch (PrinterException e) {
+            call.reject(e.getMessage());
+        }
+    }
+
+    private void doGetDeviceIdFromPairedDevices(PluginCall call) {
         String printerName = call.getString("printerName");
-        
         if (printerName == null || printerName.isEmpty()) {
             call.reject("Printer name is required");
             return;
         }
 
         try {
-            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-            if (adapter == null) {
-                Log.e(TAG, "Bluetooth adapter not available");
-                call.reject("Bluetooth adapter not available");
-                return;
-            }
-
-            if (!adapter.isEnabled()) {
-                Log.e(TAG, "Bluetooth is not enabled");
-                call.reject("Bluetooth is not enabled");
-                return;
-            }
-
-            // Check for required permissions
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.BLUETOOTH_CONNECT) 
-                    != PackageManager.PERMISSION_GRANTED) {
-                    Log.e(TAG, "BLUETOOTH_CONNECT permission not granted");
-                    call.reject("BLUETOOTH_CONNECT permission not granted");
-                    return;
-                }
-            }
-
-            Set<BluetoothDevice> pairedDevices = adapter.getBondedDevices();
-            
-            if (pairedDevices == null || pairedDevices.isEmpty()) {
-                Log.w(TAG, "No paired devices found");
-                call.reject("No paired devices found");
-                return;
-            }
-
-            Log.d(TAG, "Searching for printer: " + printerName + " among " + pairedDevices.size() + " paired devices");
-
-            for (BluetoothDevice device : pairedDevices) {
-                String deviceName = device.getName();
-                String deviceAddress = device.getAddress();
-                
-                Log.d(TAG, "Checking device: " + deviceName + " (" + deviceAddress + ")");
-                
-                if (deviceName != null && deviceName.equals(printerName)) {
-                    Log.d(TAG, "Found matching device: " + deviceName + " with address: " + deviceAddress);
-                    
-                    // Return success with device information
-                    JSObject result = new JSObject();
-                    result.put("deviceId", deviceAddress);
-                    result.put("deviceName", deviceName);
-                    result.put("success", true);
-                    call.resolve(result);
-                    return;
-                }
-            }
-
-            Log.w(TAG, "No paired device found with name: " + printerName);
-            call.reject("No paired device found with name: " + printerName);
-
-        } catch (SecurityException e) {
-            Log.e(TAG, "Security exception when accessing paired devices: " + e.getMessage());
-            call.reject("Security exception when accessing paired devices: " + e.getMessage());
-        } catch (Exception e) {
-            Log.e(TAG, "Error getting device ID from paired devices: " + e.getMessage());
-            call.reject("Error getting device ID from paired devices: " + e.getMessage());
-        }
-    }
-
-    @PluginMethod
-    public void getPairedDevices(PluginCall call) {
-        if (!hasRequiredPermissions()) {
-            call.reject("Bluetooth permissions not granted");
-            return;
-        }
-
-        try {
-            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-            if (adapter == null) {
-                Log.e(TAG, "Bluetooth adapter not available");
-                call.reject("Bluetooth adapter not available");
-                return;
-            }
-
-            if (!adapter.isEnabled()) {
-                Log.e(TAG, "Bluetooth is not enabled");
-                call.reject("Bluetooth is not enabled");
-                return;
-            }
-
-            // Check for required permissions
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.BLUETOOTH_CONNECT)
-                        != PackageManager.PERMISSION_GRANTED) {
-                    Log.e(TAG, "BLUETOOTH_CONNECT permission not granted");
-                    call.reject("BLUETOOTH_CONNECT permission not granted");
-                    return;
-                }
-            }
-
-            Set<BluetoothDevice> pairedDevices = adapter.getBondedDevices();
-
-            if (pairedDevices == null || pairedDevices.isEmpty()) {
-                Log.w(TAG, "No paired devices found");
-                JSObject result = new JSObject();
-                result.put("devices", new JSArray());
-                call.resolve(result);
-                return;
-            }
-
-            // Convert BluetoothDevice set to JSArray
-            JSArray devicesArray = new JSArray();
-
-            for (BluetoothDevice device : pairedDevices) {
-                String deviceName = device.getName();
-                String deviceAddress = device.getAddress();
-
-                Log.d(TAG, "Found paired device: " + deviceName + " (" + deviceAddress + ")");
-
-                JSObject deviceInfo = new JSObject();
-                deviceInfo.put("name", deviceName != null ? deviceName : "Unknown Device");
-                deviceInfo.put("deviceId", deviceAddress);
-                deviceInfo.put("type", device.getType()); // Device type (e.g., DEVICE_TYPE_CLASSIC)
-
-                devicesArray.put(deviceInfo);
-            }
-
-            JSObject result = new JSObject();
-            result.put("devices", devicesArray);
-            result.put("count", devicesArray.length());
+            JSObject result = bluetoothService.getDeviceIdFromPairedDevices(printerName);
+            // Add success flag and deviceName for consistency with TypeScript interface
+            result.put("success", true);
+            result.put("deviceName", printerName);
             call.resolve(result);
+        } catch (PrinterException e) {
+            JSObject result = new JSObject();
+            result.put("success", false);
+            result.put("deviceName", printerName);
+            result.put("deviceId", "");
+            call.resolve(result);
+        }
+    }
 
-        } catch (SecurityException e) {
-            Log.e(TAG, "Security exception when accessing paired devices: " + e.getMessage());
-            call.reject("Security exception when accessing paired devices: " + e.getMessage());
+    private void doPrint(PluginCall call) {
+        try {
+            PrintRequest request = PrintRequest.fromPluginCall(call);
+            executePrintOperation(call, () -> printerService.printText(request));
         } catch (Exception e) {
-            Log.e(TAG, "Error getting paired devices: " + e.getMessage());
-            call.reject("Error getting paired devices: " + e.getMessage());
+            call.reject("Invalid print request: " + e.getMessage());
         }
     }
-    private void requestPermissionForPrint() {
-        requestAllPermissions(savedPrintCall, "permissionsCallback");
-    }
 
-    public boolean hasRequiredPermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // Android 14+
-            return ContextCompat.checkSelfPermission(
-                    getContext(),
-                    Manifest.permission.BLUETOOTH_CONNECT
-            ) == PackageManager.PERMISSION_GRANTED &&
-                    ContextCompat.checkSelfPermission(
-                            getContext(),
-                            Manifest.permission.BLUETOOTH_SCAN
-                    ) == PackageManager.PERMISSION_GRANTED;
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { // Android 12+
-            return ContextCompat.checkSelfPermission(
-                    getContext(),
-                    Manifest.permission.BLUETOOTH_CONNECT
-            ) == PackageManager.PERMISSION_GRANTED &&
-                    ContextCompat.checkSelfPermission(
-                            getContext(),
-                            Manifest.permission.BLUETOOTH_SCAN
-                    ) == PackageManager.PERMISSION_GRANTED;
+    private void doPrintQRCode(PluginCall call) {
+        try {
+            QRCodePrintRequest request = QRCodePrintRequest.fromPluginCall(call);
+            executePrintOperation(call, () -> printerService.printQRCode(request));
+        } catch (Exception e) {
+            call.reject("Invalid QR code print request: " + e.getMessage());
         }
-        return true; // Not needed on Android < 12
     }
 
+    private void executePrintOperation(PluginCall call, PrintOperation operation) {
+        getBridge().execute(() -> {
+            try {
+                operation.execute();
+                JSObject result = new JSObject();
+                result.put("success", true);
+                mainHandler.post(() -> call.resolve(result));
+            } catch (PrinterException e) {
+                Logger.e(TAG, "Print operation failed", e);
+                JSObject result = new JSObject();
+                result.put("success", false);
+                mainHandler.post(() -> call.resolve(result));
+            }
+        });
+    }
+
+    // --- Permission Helper Methods ---
+
+    private boolean hasBluetoothPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Android 12+ requires BLUETOOTH_CONNECT and BLUETOOTH_SCAN
+            return getPermissionState(BLUETOOTH_CONNECT) == PermissionState.GRANTED;
+        } else {
+            // Android 11 and below requires BLUETOOTH, BLUETOOTH_ADMIN, and location permissions
+            return getPermissionState(BLUETOOTH) == PermissionState.GRANTED;
+        }
+    }
+
+    private void requestBluetoothPermissions(PluginCall call, String callbackName) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            requestPermissionForAlias(BLUETOOTH_CONNECT, call, callbackName);
+        } else {
+            requestPermissionForAlias(BLUETOOTH, call, callbackName);
+        }
+    }
+
+    // --- Standard Permission Methods ---
+
+    @Override
+    @PluginMethod
+    public void checkPermissions(PluginCall call) {
+        super.checkPermissions(call);
+    }
+
+    @Override
+    @PluginMethod
+    public void requestPermissions(PluginCall call) {
+        super.requestPermissions(call);
+    }
+
+    // --- Internal Helpers ---
+
+    private boolean ensureInitialized(PluginCall call) {
+        if (!isInitialized.get()) {
+            call.reject("PrinterBridge plugin is not initialized.");
+            return false;
+        }
+        return true;
+    }
 
     @Override
     protected void handleOnDestroy() {
-        if (bluetoothGatt != null) {
-            if (ActivityCompat.checkSelfPermission(this.getContext(),
-                    Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
-                bluetoothGatt.close();
-            }
-            bluetoothGatt = null;
+        if (bluetoothService != null) {
+            bluetoothService.cleanup();
         }
         super.handleOnDestroy();
+    }
+
+    @FunctionalInterface
+    private interface PrintOperation {
+        void execute() throws PrinterException;
     }
 }
