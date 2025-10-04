@@ -1,6 +1,6 @@
 {
   "name": "capacitor-printer-bridge",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "A Capacitor Plugin For Printing Help",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
