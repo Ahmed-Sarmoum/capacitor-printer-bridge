@@ -19,10 +19,8 @@ export interface PrinterBridgePlugin {
    * Checks if the necessary Bluetooth permissions are granted.
    */
   checkPermissions(): Promise<{
-    permission: {
-      bluetooth: 'granted' | 'denied';
-      bluetooth_connect: 'granted' | 'denied';
-    };
+    bluetooth: 'granted' | 'denied';
+    bluetooth_connect: 'granted' | 'denied';
   }>;
 
   /**

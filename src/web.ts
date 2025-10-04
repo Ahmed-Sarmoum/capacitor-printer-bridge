@@ -104,17 +104,13 @@ export class PrinterBridgePluginWeb extends WebPlugin implements PrinterBridgePl
   }
 
   async checkPermissions(): Promise<{
-    permission: {
-      bluetooth: 'granted' | 'denied';
-      bluetooth_connect: 'granted' | 'denied';
-    };
+    bluetooth: 'granted' | 'denied';
+    bluetooth_connect: 'granted' | 'denied';
   }> {
     console.warn('checkPermissions is not supported on the web; returning "granted" for testing.');
     return {
-      permission: {
-        bluetooth: 'granted',
-        bluetooth_connect: 'granted',
-      },
+      bluetooth: 'granted',
+      bluetooth_connect: 'granted',
     };
   }
 
